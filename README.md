@@ -46,3 +46,12 @@ In this course you will learn how to use data to build models of systems. We wil
   + Decision trees
   + Ensemble bagging, random forests
   + Ensemble boosting, gradient boosting, Adaboost
+ 
+# Staff
++ Lecturer: Gabriel Gomez (gomes@berkeley.edu)
++ GSIs:
+  + Catherine Weaver
+  + Ian Li
++ Readers:
+  + Yishu Yan
+  + Hyeong Yoon
