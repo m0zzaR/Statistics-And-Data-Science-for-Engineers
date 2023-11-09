@@ -16,8 +16,12 @@ def true_funct(x):
     else:
         return 1.5*np.sin(x)          # SINUSOIDAL GENERATING FUNCTION
 
-def sample_data(N,stddevX,stddevY):
+def sample_XY(N,stddevX,stddevY):
     x = stats.norm(loc=muX,scale=stddevX).rvs(N)
+    y = true_funct(x) + stats.norm(loc=0,scale=stddevY).rvs(N)
+    return x, y
+
+def sample_Y(N,x,stddevY):
     y = true_funct(x) + stats.norm(loc=0,scale=stddevY).rvs(N)
     return x, y
 
@@ -69,7 +73,7 @@ class TkContainer(BaseApp):
         self.show_function = tk.BooleanVar(master=self.root, value=False)
 
     def initialize_data(self):
-        self.Dtrain= sample_data(self.Ntrain.get(),self.stddevX.get(),self.stddevY.get())
+        self.Dtrain= sample_XY(self.Ntrain.get(),self.stddevX.get(),self.stddevY.get())
 
     def add_widgets(self):
 
@@ -88,18 +92,26 @@ class TkContainer(BaseApp):
             .pack(side=tk.TOP, fill=tk.X)
         
         # stddev X input box ......................................
-        self.get_entry_label(self.root,
-                        text="stddev X",
-                        textvariable=self.stddevXstr,
-                        validatecommand=self.set_stddevX)\
-            .pack(side=tk.TOP, fill=tk.X)
-        
+        self.get_scale(self.root,
+                       variable=self.stddevX,
+                       command=self.set_stddevX,
+                       from_= 0,
+                       to=3,
+                       resolution = 0.1,
+                       length=200,
+                       text='stddev X')\
+                .pack(side=tk.TOP, fill=tk.X)
+
         # stddev Y input box ......................................
-        self.get_entry_label(self.root,
-                        text="stddev Y",
-                        textvariable=self.stddevYstr,
-                        validatecommand=self.set_stddevY)\
-            .pack(side=tk.TOP, fill=tk.X)
+        self.get_scale(self.root,
+                       variable=self.stddevY,
+                       command=self.set_stddevY,
+                       from_= 0,
+                       to=3,
+                       resolution = 0.1,
+                       length=200,
+                       text='stddev Y')\
+                .pack(side=tk.TOP, fill=tk.X)
         
         # Header ------------------------------------------
         self.get_header(self.root,text='Training data',char='.',width=header_width)\
@@ -112,8 +124,11 @@ class TkContainer(BaseApp):
                         validatecommand=self.set_Ntrain)\
             .pack(side=tk.TOP, fill=tk.X)
         
-        # resample train button ......................................
-        self.get_button(self.root,text="Resample",command=self.press_resample_train)\
+        # resample buttons ......................................
+        self.get_button(self.root,text="Resample x from X",command=self.press_resample_X)\
+            .pack(side=tk.TOP, fill=tk.X)
+        
+        self.get_button(self.root,text="Resample y from Y|X=x",command=self.press_resample_Y)\
             .pack(side=tk.TOP, fill=tk.X)
 
         # Header ------------------------------------------
@@ -129,6 +144,7 @@ class TkContainer(BaseApp):
                        command=self.change_theta0,
                        from_=-6,
                        to=3,
+                       resolution=0.1,
                        length=200,
                        text='theta0').pack(side=tk.TOP, fill=tk.X)
         
@@ -137,6 +153,7 @@ class TkContainer(BaseApp):
                        command=self.change_theta1,
                        from_=-3,
                        to=3,
+                       resolution=0.1,
                        length=200,
                        text='theta1').pack(side=tk.TOP, fill=tk.X)
         
@@ -148,7 +165,6 @@ class TkContainer(BaseApp):
         self.get_checkbox(self.root, text='Show least squares model',variable=self.show_ls, command=self.click_ls_checkbox)\
             .pack(side=tk.TOP, fill=tk.X)
         
-
     def initialize_fig(self):
 
         ax = self.ax
@@ -171,10 +187,13 @@ class TkContainer(BaseApp):
         self.plt_model.set_visible(self.show_model.get())
 
         # leaast squares model ....................................
-        self.plt_ls, = ax.plot(self.xx, self.eval_least_squares(self.Dtrain[0],self.Dtrain[1],self.xx), c='cyan', linewidth=6)
+        yhat, yhatstddev = self.eval_least_squares(self.Dtrain[0],self.Dtrain[1],self.xx)
+        self.plt_ls, = ax.plot(self.xx, yhat, c='cyan', linewidth=6)
         self.plt_ls.set_visible(self.show_ls.get())
 
-        self
+        # prediction bounds
+        self.plt_ls_bounds = ax.fill_between(self.xx, yhat-2*yhatstddev,yhat+2*yhatstddev,alpha=0.2)
+        self.plt_ls_bounds.set_visible(self.show_ls.get())
 
         ax.set_xlim(xmin,xmax)
         ax.set_ylim(ymin,ymax)
@@ -221,7 +240,18 @@ class TkContainer(BaseApp):
             self.plt_model.set_ydata(self.eval_model(self.xx))
 
         if (self.plt_ls is not None) and replotLS:
-            self.plt_ls.set_ydata(self.eval_least_squares(self.Dtrain[0],self.Dtrain[1],self.xx))
+            yhat, yhatstddev = self.eval_least_squares(self.Dtrain[0],self.Dtrain[1],self.xx)
+            self.plt_ls.set_ydata(yhat)
+
+            # reset the fill between
+            path = self.plt_ls_bounds.get_paths()[0]
+            xnew = self.xx
+            y0new = yhat - 2*yhatstddev
+            y1new = yhat + 2*yhatstddev
+            v_x = np.hstack([xnew[0],xnew,xnew[-1],xnew[::-1],xnew[0]])
+            v_y = np.hstack([y1new[0],y0new,y0new[-1],y1new[::-1],y1new[0]])
+            path.vertices = np.vstack([v_x,v_y]).T
+            path.codes = np.array([1]+(2*len(xnew)+1)*[2]+[79]).astype('uint8')
 
         if self.plt_train is not None:
             self.plt_train.set_xdata(self.Dtrain[0])
@@ -243,39 +273,28 @@ class TkContainer(BaseApp):
     def eval_least_squares(self,X,Y,xx):
         if len(X)==0:
             return np.nan
-        hatmuX = X.mean()
-        hatmuY = Y.mean()
+        muhatX = X.mean()
+        muhatY = Y.mean()
         N = Y.shape[0]
-        hatsigmaXY = np.sum((X-hatmuX)*(Y-hatmuY))/(N-1)
-        hatsigmaX2 = np.sum((X-hatmuX)**2)/(N-1)
-        hattheta1 =  hatsigmaXY/hatsigmaX2
-        hattheta0 = hatmuY - hattheta1*hatmuX
-        return hattheta0 + hattheta1*xx
+        sigmahatXY = np.sum((X-muhatX)*(Y-muhatY))/(N-1)
+        sigmahatX2 = np.sum((X-muhatX)**2)/(N-1)
+        theta1 =  sigmahatXY/sigmahatX2
+        theta0 = muhatY - theta1*muhatX
+        yhat = theta0 + theta1*xx
+        sigmahatY2 = np.sum((Y-theta0-theta1*X)**2)/(N-1)
+        stddevYhat = np.sqrt(sigmahatY2*(1/N + ((self.xx-muhatX)**2)/sigmahatX2/(N-1)))
+        return yhat, stddevYhat
     
-    def eval_prediction_envelope(self,X,Y,xx):
-        if len(X)==0:
-            return np.nan
-        hatmuX = X.mean()
-        hatmuY = Y.mean()
-        N = Y.shape[0]
-        hatsigmaXY = np.sum((X-hatmuX)*(Y-hatmuY))/(N-1)
-        hatsigmaX2 = np.sum((X-hatmuX)**2)/(N-1)
-        hattheta1 =  hatsigmaXY/hatsigmaX2
-        hattheta0 = hatmuY - hattheta1*hatmuX
-        return hattheta0 + hattheta1*xx
-    
-    def set_stddevX(self):
+    def set_stddevX(self,event):
         try:
-            self.stddevX.set(float(self.stddevXstr.get()))
-            self.press_resample_train(replotpXY=True)
+            self.press_resample_X(replotpXY=True)
             return True
         except ValueError:
             return
 
-    def set_stddevY(self):
+    def set_stddevY(self,event):
         try:
-            self.stddevY.set(float(self.stddevYstr.get()))
-            self.press_resample_train(replotpXY=True)
+            self.press_resample_Y(replotpXY=True)
             return True
         except ValueError:
             return
@@ -283,7 +302,7 @@ class TkContainer(BaseApp):
     def set_Ntrain(self):
         try:
             self.Ntrain.set(int(self.Ntrainstr.get()))
-            self.press_resample_train()
+            self.press_resample_X()
             return True
         except ValueError:
             return False
@@ -294,8 +313,12 @@ class TkContainer(BaseApp):
     def change_theta1(self,event):
          self.update_figure()
          
-    def press_resample_train(self,replotpXY=True):
-        self.Dtrain = sample_data(self.Ntrain.get(),self.stddevX.get(), self.stddevY.get())
+    def press_resample_X(self,replotpXY=True):
+        self.Dtrain = sample_XY(self.Ntrain.get(),self.stddevX.get(), self.stddevY.get())
+        self.update_figure(replotpXY,replotLS=True)
+
+    def press_resample_Y(self,replotpXY=True):
+        self.Dtrain = sample_Y(self.Ntrain.get(),self.Dtrain[0],self.stddevY.get())
         self.update_figure(replotpXY,replotLS=True)
 
     def click_model_checkbox(self):
@@ -306,6 +329,7 @@ class TkContainer(BaseApp):
 
     def click_ls_checkbox(self):
         self.plt_ls.set_visible(self.show_ls.get())
+        self.plt_ls_bounds.set_visible(self.show_ls.get())
         plt.draw()
 
     def click_pXY_checkbox(self):

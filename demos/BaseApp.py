@@ -69,6 +69,18 @@ class BaseApp:
         self.root.quit()
         self.root.destroy()
 
+    def get_label(self,root,text):
+        f = ttk.Frame(root)
+        ttk.Label(f,
+                  text=text,
+                  style="SDSE.TLabel")\
+            .pack(side=tk.LEFT,
+                  padx=8,
+                  pady=8,
+                  fill=tk.X)        
+        return f
+
+
     def get_button(self,root,text,command):
         return ttk.Button(master=root,
                   style='SDSE.TButton',
@@ -109,17 +121,18 @@ class BaseApp:
                   pady=8,
                   fill=tk.X)
         return f
-
-    def get_scale(self,root,variable,command,from_,to,length,text=None,textvariable=None):
+    
+    def get_scale(self,root,variable,command,from_,to,length,text=None,resolution=1,textvariable=None):
 
         f = ttk.Frame(root)
 
-        ttk.Scale(master=f,
+        tk.Scale(master=f,
                  variable=variable,
                  command=command,
                  from_=from_,
                  to=to,
                  length=length,
+                 resolution=resolution,
                  orient=tk.HORIZONTAL)\
             .pack(side=tk.LEFT,
                   padx=8,
@@ -144,7 +157,6 @@ class BaseApp:
                     fill=tk.X)
             
         return f
-
 
     def get_combobox(self,root,text,textvariable,values,command):
 
